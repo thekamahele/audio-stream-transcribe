@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audio Stream Client Example</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    .status {
+      padding: 10px;
+      border-radius: 5px;
+      margin: 10px 0;
+    }
+    
+    .connected { background-color: #d4edda; }
+    .disconnected { background-color: #f8d7da; }
+    .connecting { background-color: #fff3cd; }
+    
+    .controls {
+      margin: 20px 0;
+    }
+    
+    button {
+      margin: 0 5px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    .transcript {
+      border: 1px solid #ddd;
+      padding: 15px;
+      min-height: 200px;
+      margin-top: 20px;
+      background-color: #f9f9f9;
+      white-space: pre-wrap;
+    }
+    
+    .log {
+      border: 1px solid #ddd;
+      padding: 10px;
+      margin-top: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 12px;
+      background-color: #f5f5f5;
+    }
+  </style>
+</head>
+<body>
+  <h1>Audio Stream Client Example</h1>
+  
+  <div id="status" class="status disconnected">Disconnected</div>
+  
+  <div class="controls">
+    <button id="connectBtn" onclick="connect()">Connect</button>
+    <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+    <button id="startBtn" onclick="startRecording()" disabled>Start Recording</button>
+    <button id="pauseBtn" onclick="pauseRecording()" disabled>Pause</button>
+    <button id="resumeBtn" onclick="resumeRecording()" disabled>Resume</button>
+    <button id="stopBtn" onclick="stopRecording()" disabled>Stop Recording</button>
+    <button onclick="clearTranscript()">Clear Transcript</button>
+  </div>
+  
+  <h3>Transcript:</h3>
+  <div id="transcript" class="transcript">No transcript yet...</div>
+  
+  <h3>Event Log:</h3>
+  <div id="log" class="log"></div>
+
+  <script type="module">
+    // Import the client library (in a real app, you'd use a bundler)
+    // For this example, we'll use a simple implementation
+    
+    class AudioStreamClient {
+      constructor(options) {
+        this.options = options;
+        this.ws = null;
+        this.mediaRecorder = null;
+        this.mediaStream = null;
+        this.isConnected = false;
+        this.isRecording = false;
+        this.isPaused = false;
+      }
+      
+      async connect() {
+        return new Promise((resolve, reject) => {
+          this.ws = new WebSocket(this.options.websocketUrl);
+          
+          this.ws.onopen = () => {
+            this.isConnected = true;
+            this.options.onConnected?.();
+            resolve();
+          };
+          
+          this.ws.onmessage = (event) => {
+            try {
+              const message = JSON.parse(event.data);
+              if (message.type === 'transcription') {
+                this.options.onTranscription?.(message.data);
+              }
+            } catch (e) {
+              console.error('Failed to parse message:', e);
+            }
+          };
+          
+          this.ws.onerror = (error) => {
+            this.options.onError?.(error);
+          };
+          
+          this.ws.onclose = () => {
+            this.isConnected = false;
+            this.options.onDisconnected?.();
+          };
+          
+          setTimeout(() => {
+            if (!this.isConnected) {
+              reject(new Error('Connection timeout'));
+            }
+          }, 10000);
+        });
+      }
+      
+      disconnect() {
+        if (this.ws) {
+          this.ws.close();
+        }
+      }
+      
+      async startRecording() {
+        this.mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        
+        this.mediaRecorder = new MediaRecorder(this.mediaStream);
+        
+        this.mediaRecorder.ondataavailable = (event) => {
+          if (event.data.size > 0 && this.ws.readyState === WebSocket.OPEN) {
+            event.data.arrayBuffer().then(buffer => {
+              this.ws.send(buffer);
+            });
+          }
+        };
+        
+        this.ws.send(JSON.stringify({ type: 'start-recording' }));
+        this.mediaRecorder.start(1000); // 1 second chunks
+        this.isRecording = true;
+        this.isPaused = false;
+      }
+      
+      stopRecording() {
+        if (this.mediaRecorder) {
+          this.mediaRecorder.stop();
+        }
+        if (this.mediaStream) {
+          this.mediaStream.getTracks().forEach(track => track.stop());
+        }
+        if (this.ws.readyState === WebSocket.OPEN) {
+          this.ws.send(JSON.stringify({ type: 'stop-recording' }));
+        }
+        this.isRecording = false;
+        this.isPaused = false;
+      }
+      
+      pauseRecording() {
+        if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+          this.mediaRecorder.pause();
+          this.ws.send(JSON.stringify({ type: 'pause-recording' }));
+          this.isPaused = true;
+        }
+      }
+      
+      resumeRecording() {
+        if (this.mediaRecorder && this.mediaRecorder.state === 'paused') {
+          this.mediaRecorder.resume();
+          this.ws.send(JSON.stringify({ type: 'resume-recording' }));
+          this.isPaused = false;
+        }
+      }
+    }
+    
+    // Global client instance
+    let client = null;
+    let fullTranscript = '';
+    
+    function log(message) {
+      const logDiv = document.getElementById('log');
+      const timestamp = new Date().toLocaleTimeString();
+      logDiv.innerHTML += `[${timestamp}] ${message}<br>`;
+      logDiv.scrollTop = logDiv.scrollHeight;
+    }
+    
+    function updateStatus(status, className) {
+      const statusDiv = document.getElementById('status');
+      statusDiv.textContent = status;
+      statusDiv.className = `status ${className}`;
+    }
+    
+    function updateButtons() {
+      const isConnected = client?.isConnected || false;
+      const isRecording = client?.isRecording || false;
+      const isPaused = client?.isPaused || false;
+      
+      document.getElementById('connectBtn').disabled = isConnected;
+      document.getElementById('disconnectBtn').disabled = !isConnected;
+      document.getElementById('startBtn').disabled = !isConnected || isRecording;
+      document.getElementById('pauseBtn').disabled = !isRecording || isPaused;
+      document.getElementById('resumeBtn').disabled = !isRecording || !isPaused;
+      document.getElementById('stopBtn').disabled = !isRecording;
+    }
+    
+    window.connect = async function() {
+      try {
+        updateStatus('Connecting...', 'connecting');
+        log('Connecting to server...');
+        
+        // Generate a session ID
+        const sessionId = Math.random().toString(36).substring(2);
+        
+        client = new AudioStreamClient({
+          websocketUrl: `ws://localhost:8080?sessionId=${sessionId}`,
+          onConnected: () => {
+            updateStatus('Connected', 'connected');
+            log('Connected successfully');
+            updateButtons();
+          },
+          onDisconnected: () => {
+            updateStatus('Disconnected', 'disconnected');
+            log('Disconnected from server');
+            updateButtons();
+          },
+          onTranscription: (data) => {
+            if (data.transcript) {
+              fullTranscript += data.transcript + ' ';
+              document.getElementById('transcript').textContent = fullTranscript;
+              log(`Received transcript: "${data.transcript}"`);
+            }
+          },
+          onError: (error) => {
+            log(`Error: ${error.message || error}`);
+          }
+        });
+        
+        await client.connect();
+      } catch (error) {
+        updateStatus('Connection Failed', 'disconnected');
+        log(`Connection failed: ${error.message}`);
+        updateButtons();
+      }
+    };
+    
+    window.disconnect = function() {
+      if (client) {
+        client.disconnect();
+        log('Disconnecting...');
+      }
+    };
+    
+    window.startRecording = async function() {
+      try {
+        log('Starting recording...');
+        await client.startRecording();
+        log('Recording started');
+        updateButtons();
+      } catch (error) {
+        log(`Failed to start recording: ${error.message}`);
+      }
+    };
+    
+    window.stopRecording = function() {
+      if (client) {
+        client.stopRecording();
+        log('Recording stopped');
+        updateButtons();
+      }
+    };
+    
+    window.pauseRecording = function() {
+      if (client) {
+        client.pauseRecording();
+        log('Recording paused');
+        updateButtons();
+      }
+    };
+    
+    window.resumeRecording = function() {
+      if (client) {
+        client.resumeRecording();
+        log('Recording resumed');
+        updateButtons();
+      }
+    };
+    
+    window.clearTranscript = function() {
+      fullTranscript = '';
+      document.getElementById('transcript').textContent = 'No transcript yet...';
+      log('Transcript cleared');
+    };
+    
+    // Initialize
+    updateButtons();
+    log('Audio Stream Client ready');
+  </script>
+</body>
+</html>
