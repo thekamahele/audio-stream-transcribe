@@ -1,0 +1,42 @@
+import { EventEmitter } from 'eventemitter3';
+import { ClientOptions, ConnectionState, RecordingState, ClientEvents } from '../common/types';
+export declare class AudioStreamClient extends EventEmitter<ClientEvents> {
+    private options;
+    private ws;
+    private mediaRecorder;
+    private mediaStream;
+    private connectionState;
+    private recordingState;
+    private reconnectAttempts;
+    private reconnectTimer;
+    private pingTimer;
+    private pongTimer;
+    private audioChunkTimer;
+    private recordedChunks;
+    constructor(options: ClientOptions);
+    connect(): Promise<void>;
+    private establishConnection;
+    private handleMessage;
+    private handleTranscription;
+    private handleDisconnection;
+    private scheduleReconnection;
+    disconnect(): void;
+    startRecording(): Promise<void>;
+    stopRecording(): Promise<Blob | null>;
+    pauseRecording(): void;
+    resumeRecording(): void;
+    private getSupportedMimeType;
+    private sendAudioData;
+    private sendMessage;
+    private startPingInterval;
+    private stopPingInterval;
+    private sendPing;
+    private handlePong;
+    private setConnectionState;
+    private setRecordingState;
+    getConnectionState(): ConnectionState;
+    getRecordingState(): RecordingState;
+    isConnected(): boolean;
+    isRecording(): boolean;
+}
+//# sourceMappingURL=AudioStreamClient.d.ts.map

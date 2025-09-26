@@ -82,7 +82,7 @@ export function useAudioStream(options: UseAudioStreamOptions): UseAudioStreamRe
     
     client.on('transcription', (result) => {
       setLastTranscription(result);
-      setTranscript(prev => {
+      setTranscript((prev: string) => {
         if (result.transcript) {
           return prev ? `${prev} ${result.transcript}` : result.transcript;
         }

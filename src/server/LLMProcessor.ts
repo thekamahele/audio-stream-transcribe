@@ -40,7 +40,7 @@ export class LLMProcessor extends EventEmitter<LLMProcessorEvents> {
     audio: Buffer[];
     transcripts: TranscriptionResult[];
     metadata?: Record<string, any>;
-    timer?: NodeJS.Timer;
+    timer?: NodeJS.Timeout;
   }> = new Map();
   
   private llmHandler: LLMHandler | null = null;

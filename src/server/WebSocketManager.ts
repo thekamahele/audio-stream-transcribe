@@ -15,7 +15,7 @@ export interface WebSocketConnection {
 export class WebSocketManager extends EventEmitter {
   private connections: Map<string, WebSocketConnection> = new Map();
   private userConnections: Map<string, Set<string>> = new Map();
-  private pingInterval: NodeJS.Timer | null = null;
+  private pingInterval: NodeJS.Timeout | null = null;
   
   constructor(
     private options: {

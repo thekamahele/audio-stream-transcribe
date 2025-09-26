@@ -84,7 +84,11 @@ export class DeepgramProvider extends TranscriptionProvider {
       
       // Send audio data
       try {
-        connection!.deepgramLive.send(audioData);
+        // Convert to ArrayBuffer for Deepgram compatibility
+        const dataToSend = Buffer.isBuffer(audioData) 
+          ? audioData.buffer.slice(audioData.byteOffset, audioData.byteOffset + audioData.byteLength)
+          : audioData;
+        connection!.deepgramLive.send(dataToSend);
       } catch (error) {
         clearTimeout(timeout);
         reject(error);

@@ -17,10 +17,10 @@ export class AudioStreamClient extends EventEmitter<ClientEvents> {
   private connectionState: ConnectionState = ConnectionState.DISCONNECTED;
   private recordingState: RecordingState = RecordingState.IDLE;
   private reconnectAttempts = 0;
-  private reconnectTimer: NodeJS.Timer | null = null;
-  private pingTimer: NodeJS.Timer | null = null;
-  private pongTimer: NodeJS.Timer | null = null;
-  private audioChunkTimer: NodeJS.Timer | null = null;
+  private reconnectTimer: NodeJS.Timeout | null = null;
+  private pingTimer: NodeJS.Timeout | null = null;
+  private pongTimer: NodeJS.Timeout | null = null;
+  private audioChunkTimer: NodeJS.Timeout | null = null;
   private recordedChunks: Blob[] = [];
   
   constructor(private options: ClientOptions) {

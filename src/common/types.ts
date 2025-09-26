@@ -82,7 +82,7 @@ export interface ServerEvents {
   transcription: (params: TranscriptionResult & { sessionId: string }) => void;
   'audio-chunk': (chunk: AudioChunk) => void;
   error: (params: { sessionId: string; error: Error }) => void;
-  'llm-request': (params: { sessionId: string; audio: Buffer; metadata?: any }) => void;
+  'llm-request': (params: { sessionId: string; audio?: Buffer; metadata?: any }) => void;
 }
 
 export interface ClientEvents {
